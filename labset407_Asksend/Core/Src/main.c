@@ -45,6 +45,7 @@ TIM_HandleTypeDef htim6;
 
 /* USER CODE BEGIN PV */
 int i_flash;
+int ready=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -74,7 +75,7 @@ int _write(int fd, char* ptr, int len) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  long int a = 0;
+  int a = 0;
   long int times = 0;
   long int time_start;
   long int time_end;
@@ -132,32 +133,47 @@ int main(void)
   while (1)
   {
     //此处添加输入输出代码
+    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)   /* sw0 控制状态切换*/
+      {
+        state=0;//RESET位为数据传输状态
+        HAL_GPIO_WritePin(GPIOF,GPIO_PIN_7,GPIO_PIN_RESET);//传递信息给接收方实验箱
+      }
+
+    else 
+      {
+        state=1;//SET位为LED灯控制模块
+        HAL_GPIO_WritePin(GPIOF,GPIO_PIN_7,GPIO_PIN_SET);
+      }
+
+
     /*——————————LED灯控制模块——————————*/
     
-    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)   /* sw0 控制LED灯控制功能 */
-       state = 0;
-    else 
-       state = 1;
-
     while(state)
     {
-      HAL_GPIO_TogglePin(GPIOF,GPIO_PIN_7);
-      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1) == GPIO_PIN_RESET)   /* sw1 */
+      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1) == GPIO_PIN_RESET)   /* sw1 控制GPIOF_PIN_5电平向接收方传递信息*/
         HAL_GPIO_WritePin(GPIOF,GPIO_PIN_5, GPIO_PIN_RESET);
       else 
         HAL_GPIO_WritePin(GPIOF,GPIO_PIN_5, GPIO_PIN_SET);
 
-      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == GPIO_PIN_RESET)   /* sw2 */
+      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == GPIO_PIN_RESET)   /* sw2 控制GPIOF_PIN6电平*/
         HAL_GPIO_WritePin(GPIOF,GPIO_PIN_6, GPIO_PIN_RESET);
       else 
         HAL_GPIO_WritePin(GPIOF,GPIO_PIN_6, GPIO_PIN_SET); 
+      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)   /* 若SW0状态改变，切换状态 */
+       {
+        break;
+       }
+        
     }
   
     
 
     /*————————数据传输速度测试模块—————————*/
   if(!state)
-    time_start=HAL_GetTick();
+    {
+      time_start=HAL_GetTick();//开始时记录时间
+      times=0;//每次开始该数据传输状态将次数重置为0
+    }
     
   //数据传输开始
   while(!state)
@@ -165,26 +181,48 @@ int main(void)
     if(a <= 128)
       a++;
     else
-      a = 0;
-    GPIOF->ODR = (GPIOF->ODR & 0xFFE0) | (a & 0x1F);
+      a = 0;//传输数据从0-128，换算为二进制的后五位
 
-    if(HAL_GPIO_ReadPin(GPIOF,GPIO_PIN_9)==GPIO_PIN_RESET)
-      HAL_GPIO_WritePin(GPIOF,GPIO_PIN_8,GPIO_PIN_SET);
-      
-    if(HAL_GPIO_ReadPin(GPIOF,GPIO_PIN_9)==GPIO_PIN_SET)
+    if(HAL_GPIO_ReadPin(GPIOF,GPIO_PIN_9)==GPIO_PIN_RESET)//判断ack=0,即接收端实验箱处于空闲
       {
-        HAL_GPIO_WritePin(GPIOF,GPIO_PIN_8,GPIO_PIN_RESET);
-        times++;
+        GPIOF->ODR = (GPIOF->ODR & 0xFFE0) | (a & 0x1F);//准备数据
+        HAL_GPIO_WritePin(GPIOF,GPIO_PIN_8,GPIO_PIN_SET);//数据准备完毕，将ready置1
+        // ready=1;
+        // printf("1");
       }
+    if(HAL_GPIO_ReadPin(GPIOF,GPIO_PIN_9)==GPIO_PIN_SET)//判断当接收端开始接收数据（ack=1）
+      {
+        HAL_GPIO_WritePin(GPIOF,GPIO_PIN_8,GPIO_PIN_RESET);//复位ready
+        times++;//记录完成一次数据传输
+        // ready=0; 
+        // printf("2");  //调试代码
+        time_end=HAL_GetTick();//记录传输完成时间
+        // printf("Sending: \n data :  ");
+        // int b=a;
+        // int j=0;
+        // for(j=0;j<5;j++)
+        // {
+        //   if(b%2)
+        //   printf("1");
+        //   else
+        //   printf("0");
+        //   b=b/2;
+        // }
+        // printf("\n Num : %ld Time : %ld \n\n ",times,time_end-time_start);//输出传输数据，成功传输次数及传输所需时间
+    if((time_end-time_start)%1000==0)
+    printf("\n\n\n\n\n\n\n\n\n\n Have sent %ld times. \n\n\n\n\n\n\n\n\n\n" , times);//输出每隔1秒，成功传输数据的次数
+      }
+    
+   
+    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_SET)   /* 根据sw0状态及时切换状态  */
+    {
+      break; 
     }
-    time_end=HAL_GetTick();
-    printf("data : %d  time : %ld Time : %ld \n\n ",a,times,time_start-time_end);
+    }
 
-    if(time_start-time_end==1000)
-      printf("\n\n\n\n Have sent %ld times. \n\n\n\n\n" , times);
   }
+
   }
-  
 
     /* USER CODE END WHILE */
 

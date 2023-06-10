@@ -74,11 +74,11 @@ int _write(int fd, char* ptr, int len) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-    int a[5] = {0};
-    int j = 0;
     long int times = 0;
-    long int time_start;
-    long int time_end;
+    long int time_start=0;
+    long int time_end=0;
+    int i = 0;
+    int ack=0;
   
 
   /* USER CODE END 1 */
@@ -142,82 +142,98 @@ int main(void)
     //此处添加输入输出代码
 
     /*——————数据传输测试模块——————*/
-    if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7) == GPIO_PIN_SET)
-       time_start=HAL_GetTick();
+if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7) == GPIO_PIN_RESET)
+      {
+        time_start=HAL_GetTick();//记录开始时间
+        times=0;//每次将成功传输次数置零
+      }
 
-    if(HAL_GPIO_ReadPin(GPIOC,GPIO_PIN_8)==GPIO_PIN_SET)
+while(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7) == GPIO_PIN_RESET)
     {
-      HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_SET);
-      uint8_t input_data = (uint8_t)GPIOC->IDR & 0x1F;
-      GPIOF->ODR = (GPIOF->ODR & 0xFFE0) | input_data;
-      if(HAL_GPIO_ReadPin(GPIOC,GPIO_PIN_8)==GPIO_PIN_RESET)
-        {
-          HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_RESET);
-          times++;
-        }
+      HAL_GPIO_WritePin(GPIOF,GPIO_PIN_0,GPIO_PIN_RESET);//熄灭led0，进入数据传输状态
+      if(HAL_GPIO_ReadPin(GPIOC,GPIO_PIN_8)==GPIO_PIN_SET)//查询到ready置1
+     {
+        HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_SET);//将ack置1
+        ack=1;
+     } 
+    while(ack)
+      {
+        uint8_t input_data = (uint8_t)GPIOC->IDR & 0x1F;
+        GPIOC->ODR = (GPIOC->ODR & 0xFFE0) | input_data;//接收数据
+        if(HAL_GPIO_ReadPin(GPIOC,GPIO_PIN_8)==GPIO_PIN_RESET) //接收完毕后，若ready为0
+       {
+        HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_RESET);//ack复位，实现握手完整过程
+        times++;//成功传输次数+1
+        ack=0;
+        time_end = HAL_GetTick();//记录结束时间
+
+        // printf("Getting:\n data : ");
+
+        // uint16_t pin = GPIO_PIN_0;
+        // for(i = 0; i < 5; i++)
+        // {
+        //   pin = GPIO_PIN_0 << i;  
+
+        //   if(HAL_GPIO_ReadPin(GPIOC, pin) == GPIO_PIN_SET)
+        //     printf("1");
+        //   else
+        //     printf("0");
+        // }
+
+        // printf("Num : %ld   Time : %ld\n\n",times,time_end-time_start);//输出数据内容，总传输次数及总用时
+
+        if((time_end-time_start)%1000==0)
+         printf("\n\n\n\nHave Got %ld times.\n\n\n\n" , times);//记录每秒接收多少次数据
+        break;
+       } 
+        // printf("4");//调试代码
+      }
+    
+      
+
+
+
     }
-    time_end = HAL_GetTick();
-
-    printf("data : ");
-
-    // uint16_t pin = GPIO_PIN_0;
-    // int a = 0b0;
-    // for(i = 0; i < 5; i++)
-    // {
-    //   pin = GPIO_PIN_0 << i;
-    //   HAL_GPIO_WritePin(GPIOF, pin, HAL_GPIO_ReadPin(GPIOC, pin));   
-
-    //   // if(HAL_GPIO_ReadPin(GPIOC, pin) == GPIO_PIN_SET)
-    //   //   printf("1");
-    //   // else
-    //   //   printf("0");
-    // }
-
-
-    printf(" time : %ld\n Time : %ld\n\n",times,time_start-time_end);
-
-    if(time_start-time_end == 1000)
-       printf("Have sent %ld times.\n" , times);
-
 
 
     /*————————LED控制模块————————*/
-    while(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7) == GPIO_PIN_SET)
+    while(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7) == GPIO_PIN_SET)//当发送端sw0置位
       {
-        HAL_GPIO_TogglePin(GPIOF,GPIO_PIN_0);
+        HAL_GPIO_WritePin(GPIOF,GPIO_PIN_0,GPIO_PIN_SET);//点亮led0，表明正处于led控制模块
         
-      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_5) == GPIO_PIN_RESET &&
-          HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_6) == GPIO_PIN_RESET)   
-        {
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_1,GPIO_PIN_RESET);
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_2,GPIO_PIN_RESET);
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_3,GPIO_PIN_RESET);
-        }
+        if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_5) == GPIO_PIN_RESET && 
+            HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_6) == GPIO_PIN_RESET)   //00
+          {
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_1,GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_2,GPIO_PIN_RESET);//不亮额外的led
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_3,GPIO_PIN_RESET);
+          }
 
-      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_5) == GPIO_PIN_RESET &&
-          HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_6) == GPIO_PIN_SET) 
-        {
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_1,GPIO_PIN_SET);
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_2,GPIO_PIN_RESET);
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_3,GPIO_PIN_RESET);
-        } 
+        if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_5) == GPIO_PIN_RESET &&
+            HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_6) == GPIO_PIN_SET) //01
+          {
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_1,GPIO_PIN_SET);
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_2,GPIO_PIN_RESET);//light up led1
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_3,GPIO_PIN_RESET);
+          } 
 
 
-      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_5) == GPIO_PIN_SET &&
-          HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_6) == GPIO_PIN_RESET)
-        {
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_1,GPIO_PIN_SET);
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_2,GPIO_PIN_SET);
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_3,GPIO_PIN_RESET);
-        }
+        if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_5) == GPIO_PIN_SET &&
+            HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_6) == GPIO_PIN_RESET)//10
+          {
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_1,GPIO_PIN_SET);
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_2,GPIO_PIN_SET);//light up led1 led2
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_3,GPIO_PIN_RESET);
+          }
 
-      if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_5) == GPIO_PIN_SET &&
-          HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_6) == GPIO_PIN_SET)  
-        {
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_1,GPIO_PIN_SET);
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_2,GPIO_PIN_SET);
-          HAL_GPIO_WritePin(GPIOF,GPIO_PIN_3,GPIO_PIN_SET);
-        }
+        if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_5) == GPIO_PIN_SET &&
+            HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_6) == GPIO_PIN_SET)  //11
+          {
+            
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_1,GPIO_PIN_SET);
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_2,GPIO_PIN_SET);//light up led1-led3
+            HAL_GPIO_WritePin(GPIOF,GPIO_PIN_3,GPIO_PIN_SET);
+          }
         }
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
@@ -367,6 +383,7 @@ static void MX_GPIO_Init(void)
   GPIO_Initure.Pull = GPIO_NOPULL;
   GPIO_Initure.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_Initure);
+  HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_RESET);
 
   GPIO_Initure.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | 
   GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8;  /* 传输数据输入 */
